@@ -4,7 +4,7 @@ use std::{
     ops::{Add, Div, Mul, Sub},
 };
 
-#[derive(Debug, Clone, Copy, Serialize)]
+#[derive(Debug, Clone, Copy, Serialize, PartialEq)]
 pub enum SkyAngle<T: Conversion<T>> {
     Radian(T),
     Degree(T),
@@ -40,7 +40,7 @@ impl<T: Conversion<T> + Display> Display for SkyAngle<T> {
 impl<T: Conversion<T>> SkyAngle<T> {
     pub fn to_radians(self) -> T {
         match self {
-            Self::Radian(val) => val,
+            Self::Radian(val) => val, // Can be hardcoded
             Self::Degree(val) => T::from_degree(val),
             Self::Arcminute(val) => T::from_arcmin(val),
             Self::Arcsecond(val) => T::from_arcsec(val),
@@ -59,67 +59,62 @@ impl<T: Conversion<T>> SkyAngle<T> {
     pub fn into_mas(self) -> Self {
         SkyAngle::MilliArcsec(self.to_radians().to_mas())
     }
+
+    // pub fn into_<abbrv>(self) -> Self {
+    //     SkyAngle::<unit>(self.to_radians().to_<abbrv>())
+    // }
     pub fn into_value(self) -> T {
+        // match self {
+        //     SkyAngle::Radian(val) => val,
+        //     SkyAngle::Degree(val) => val,
+        //     SkyAngle::Arcminute(val) => val,
+        //     SkyAngle::Arcsecond(val) => val,
+        //     SkyAngle::MilliArcsec(val) => val,
+        // }
         match self {
-            SkyAngle::Radian(val) => val,
-            SkyAngle::Degree(val) => val,
-            SkyAngle::Arcminute(val) => val,
-            SkyAngle::Arcsecond(val) => val,
-            SkyAngle::MilliArcsec(val) => val,
+            SkyAngle::Radian(val)       | // Hardcoded
+            SkyAngle::Degree(val)       |
+            SkyAngle::Arcminute(val)    |
+            SkyAngle::Arcsecond(val)    |
+            SkyAngle::MilliArcsec(val)  => val
         }
     }
 }
 
-impl<T> Add for SkyAngle<T>
-where
-    T: Conversion<T> + Add<Output = T>,
-{
-    type Output = T;
+macro_rules! impl_self_ops {
+    ($name:ty ; $(($t_op:tt, $abbrv:tt, $op:tt)),+) => {
+        $(impl<T> $t_op for $name
+        where
+            T: Conversion<T> + $t_op<Output = T>,
+        {
+            type Output = T;
 
-    fn add(self, rhs: Self) -> Self::Output {
-        self.to_radians() + rhs.to_radians()
-    }
+            fn $abbrv(self, rhs: Self) -> Self::Output {
+                self.to_radians() $op rhs.to_radians()
+            }
+        })+
+    };
 }
-impl<T> Sub for SkyAngle<T>
-where
-    T: Conversion<T> + Sub<Output = T>,
-{
-    type Output = T;
 
-    fn sub(self, rhs: Self) -> Self::Output {
-        self.to_radians() - rhs.to_radians()
-    }
-}
-impl<T> Div for SkyAngle<T>
-where
-    T: Conversion<T> + Div<Output = T>,
-{
-    type Output = T;
+impl_self_ops!(SkyAngle<T> ; (Div, div, /), (Sub, sub, -), (Add, add, +));
 
-    fn div(self, rhs: Self) -> Self::Output {
-        self.to_radians() / rhs.to_radians()
-    }
-}
-impl<T> Div<T> for SkyAngle<T>
-where
-    T: Conversion<T> + Div<Output = T>,
-{
-    type Output = T;
 
-    fn div(self, rhs: T) -> Self::Output {
-        self.to_radians() / rhs
-    }
+macro_rules! impl_extern_ops {
+    ($name:ty ; $(($t_op:tt, $abbrv:tt, $op:tt)),+) => {
+        $(impl<T> $t_op<T> for $name
+            where
+                T: Conversion<T> + $t_op<Output = T>,
+            {
+                type Output = T;
+            
+                fn $abbrv(self, rhs: T) -> Self::Output {
+                    self.to_radians() $op rhs
+                }
+            })+
+    };
 }
-impl<T> Mul<T> for SkyAngle<T>
-where
-    T: Conversion<T> + Mul<Output = T>,
-{
-    type Output = T;
 
-    fn mul(self, rhs: T) -> Self::Output {
-        self.to_radians() * rhs
-    }
-}
+impl_extern_ops!(SkyAngle<T> ; (Div, div, /), (Mul, mul, *));
 
 /// Conversion between angle units
 pub trait Conversion<T> {
@@ -232,11 +227,6 @@ macro_rules! impl_conversion {
 }
 impl_conversion!(f64, f32);
 
-// There's lots of repeated code with 
-// to_<unit> -> T, and, from_<unit> -> T
-macro_rules! to_from_T {
-    ($($unit:tt),+) => {}
-}
 
 #[cfg(test)]
 pub mod tests {
@@ -247,5 +237,43 @@ pub mod tests {
         let a = SkyAngle::Arcminute(1f64);
         let s = serde_json::to_string(&a).unwrap();
         println!("{s}");
+    }
+
+    #[test]
+    fn self_operations() {
+        let a = SkyAngle::Degree(1f64);
+        let b = SkyAngle::Degree(1f64);
+
+        // Add
+        let _ = a + b;
+        // Subtract
+        let _ = a - b;
+        // Divide
+        let _ = a / b;
+    }
+
+    #[test]
+    fn ext_operations() {
+        let a = SkyAngle::Degree(1f64);
+
+        // Divide
+        let _ = a / 2f64;
+        // Multiply
+        let _ = a * 2f64;
+    }
+
+    #[test]
+    fn conversion() {
+        let a = SkyAngle::Arcminute(1f64);
+
+        // Check value is preserved through conversions
+        let b = a.clone()
+            .into_arcmin()
+            .into_arcsec()
+            .into_degree()
+            .into_mas()
+            .into_arcmin();
+
+        assert_eq!(b, a);
     }
 }
