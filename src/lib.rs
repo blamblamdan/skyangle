@@ -141,27 +141,27 @@ macro_rules! make_to_from_T_V {
         with_dollar_sign!{
             ($d:tt) => {
                 macro_rules! to_from_T_V {
-                    ($d($unit:tt),+) => {$(
-                        impl Conversion<$t_name> for $v_name {
-                            to_from_T_V!{1 $t_name; $d($unit),+} 
-                        }
-                    )+};
-                    (1 $name:ty; $d($unit:tt),+) => {
-                        $d(
-                            fn from_$unit (self) -> $name {
-                                self.into_iter().map(|x| x.from_$unit()).collect()
+                    // ($d($unit:tt),+) => {
+                    ($d(($f:tt, $t:tt)),+) => { // TODO
+                        $(
+                            impl Conversion<$t_name> for $v_name {
+                                $d(
+                                    fn $f(self) -> $t_name {
+                                        self.into_iter().map(|x| x.$f()).collect()
+                                    }
+                                )+
+                                $d(
+                                    fn $t(self) -> $t_name {
+                                        self.into_iter().map(|x| x.$t()).collect()
+                                    }
+                                )+
                             }
                         )+
-                        $d(
-                            fn to_$unit(self) -> $name {
-                                self.into_iter().map(|x| x.to_$unit()).collect()
-                            }
-                        )+
-                    };
+                    }
                 }
             }
         }
-    };
+    }
 }
 
 
@@ -206,11 +206,17 @@ macro_rules! impl_conversion {
         make_to_from_T_V!(
             // Add more to here
             $(
-                Vec<$name> |  Vec<$name>; 
-                Vec<$name> |  &[$name]
+                Vec<$name>|Vec<$name>; 
+                Vec<$name>|&[$name]
             );+
         );
-        to_from_T_V!(degree, arcmin, arcsec, mas);
+        // to_from_T_V!(degree, arcmin, arcsec, mas)
+        to_from_T_V!(
+            (from_degree, to_degree),
+            (from_arcmin, to_arcmin),
+            (from_arcsec, to_arcsec),
+            (from_mas, to_mas)
+        );
         
     }
 }
