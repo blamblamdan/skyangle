@@ -128,6 +128,47 @@ pub trait Conversion<T> {
     fn to_mas(self) -> T;
 }
 
+/// Implement wrapping
+macro_rules! with_dollar_sign {
+    ($($body:tt)*) => {
+        macro_rules! __with_dollar_sign { $($body)* }
+        __with_dollar_sign!($);
+    }
+}
+
+macro_rules! make_to_from_T_V {
+    ($($t_name:ty | $v_name: ty);+) => {
+        with_dollar_sign!{
+            ($d:tt) => {
+                macro_rules! to_from_T_V {
+                    ($d($unit:tt),+) => {$(
+                        impl Conversion<$t_name> for $v_name {
+                            to_from_T_V!{1 $t_name; $d($unit),+} 
+                        }
+                    )+};
+                    (1 $name:ty; $d($unit:tt),+) => {
+                        $d(
+                            fn from_$unit (self) -> $name {
+                                self.into_iter().map(|x| x.from_$unit()).collect()
+                            }
+                        )+
+                        $d(
+                            fn to_$unit(self) -> $name {
+                                self.into_iter().map(|x| x.to_$unit()).collect()
+                            }
+                        )+
+                    };
+                }
+            }
+        }
+    };
+}
+
+
+
+
+
+
 macro_rules! impl_conversion {
     ($($name:ty),+) => {
         $(impl Conversion<$name> for $name {
@@ -161,69 +202,17 @@ macro_rules! impl_conversion {
                 1e3 * self.to_arcsec()
             }
         })+
-        $(impl Conversion<Vec<$name>> for Vec<$name> {
-            fn from_degree(self) -> Vec<$name> {
-                self.into_iter().map(|x| x.from_degree()).collect()
-            }
-            fn from_arcmin(self) -> Vec<$name> {
-                self.into_iter().map(|x| x.from_arcmin()).collect()
-            }
 
-            fn from_arcsec(self) -> Vec<$name> {
-                self.into_iter().map(|x| x.from_arcsec()).collect()
-            }
-
-            fn from_mas(self) -> Vec<$name> {
-                self.into_iter().map(|x| x.from_mas()).collect()
-            }
-
-            fn to_degree(self) -> Vec<$name> {
-                self.into_iter().map(|x| x.to_degree()).collect()
-            }
-            fn to_arcmin(self) -> Vec<$name> {
-                self.into_iter().map(|x| x.to_arcmin()).collect()
-            }
-
-            fn to_arcsec(self) -> Vec<$name> {
-                self.into_iter().map(|x| x.to_arcsec()).collect()
-            }
-
-            fn to_mas(self) -> Vec<$name> {
-                self.into_iter().map(|x| x.to_mas()).collect()
-            }
-        })+
-        $(impl Conversion<Vec<$name>> for &[$name] {
-            fn from_degree(self) -> Vec<$name> {
-                self.into_iter().map(|x| x.from_degree()).collect()
-            }
-            fn from_arcmin(self) -> Vec<$name> {
-                self.into_iter().map(|x| x.from_arcmin()).collect()
-            }
-
-            fn from_arcsec(self) -> Vec<$name> {
-                self.into_iter().map(|x| x.from_arcsec()).collect()
-            }
-
-            fn from_mas(self) -> Vec<$name> {
-                self.into_iter().map(|x| x.from_mas()).collect()
-            }
-
-            fn to_degree(self) -> Vec<$name> {
-                self.into_iter().map(|x| x.to_degree()).collect()
-            }
-
-            fn to_arcmin(self) -> Vec<$name> {
-                self.into_iter().map(|x| x.to_arcmin()).collect()
-            }
-
-            fn to_arcsec(self) -> Vec<$name> {
-                self.into_iter().map(|x| x.to_arcsec()).collect()
-            }
-
-            fn to_mas(self) -> Vec<$name> {
-                self.into_iter().map(|x| x.to_mas()).collect()
-            }
-        })+    };
+        make_to_from_T_V!(
+            // Add more to here
+            $(
+                Vec<$name> |  Vec<$name>; 
+                Vec<$name> |  &[$name]
+            );+
+        );
+        to_from_T_V!(degree, arcmin, arcsec, mas);
+        
+    }
 }
 impl_conversion!(f64, f32);
 
